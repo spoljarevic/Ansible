@@ -1,0 +1,181 @@
+
+---
+- name: Red Hat Enterprise Linux post-install setup
+  hosts: all
+  become: true
+
+
+# === Installing and activating Epel Repository ===
+- name: Enable CodeReady Builder repository
+  ansible.builtin.command:
+    cmd: "subscription-manager repos --enable=codeready-builder-for-rhel-10-{{ ansible_architecture }}-rpms"
+  args:
+    creates: "/etc/yum.repos.d/redhat.repo"
+
+- name: Install EPEL release package
+  ansible.builtin.dnf:
+    name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm"
+    state: present
+    disable_gpg_check: yes
+
+- name: Enable CRB repository
+  ansible.builtin.command:
+    cmd: "/usr/bin/crb enable"
+  args:
+    creates: "/etc/yum.repos.d/crb.repo"
+
+# === Adding and installing Docker ===
+- name: Ensure dnf‑plugins‑core is installed
+  ansible.builtin.dnf:
+    name: dnf-plugins-core
+    state: present
+  become: true
+
+- name: Add Docker CE repo
+  ansible.builtin.command:
+    cmd: dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+  become: true
+
+- name: Install Docker Engine and related packages
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  become: true
+
+# === Installing programs using the package manager dnf ===
+- name: Install base packages with dnf
+  dnf:
+    name:
+      - vim
+      - neovim
+      - podman-compose
+      - fastfetch
+    state: present
+    update_cache: true
+
+- name: Copy RPMs to remote host
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/tmp/{{ item | basename }}"
+    mode: '0644'
+  loop: "{{ lookup('fileglob', role_path + '/files/*.rpm', wantlist=True) }}"
+
+- name: Install local RPMs from remote tmp
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+    disable_gpg_check: yes
+  loop:
+    - /tmp/codium-1.104.26450-el8.x86_64.rpm
+    - /tmp/onlyoffice-desktopeditors.x86_64.rpm
+    - /tmp/ProtonAuthenticator-1.1.4-1.x86_64.rpm
+    - /tmp/protonmail-bridge-3.21.2-1.x86_64.rpm
+    - /tmp/ProtonMail-desktop-beta.rpm
+    - /tmp/proton-pass-1.32.7-1.x86_64.rpm
+    - /tmp/VirtualBox-7.2-7.2.2_170484_fedora40-1.x86_64.rpm
+    - /tmp/vivaldi-stable-7.6.3797.56-1.x86_64.rpm
+    - /tmp/slack-4.46.99-0.1.el8.x86_64.rpm
+    - /tmp/teamviewer.x86_64.rpm
+    - /tmp/winboat-0.8.7-x86_64.rpm
+
+- name: Install KDE Plasma Workspaces group
+  ansible.builtin.dnf:
+    name: "@KDE Plasma Workspaces"
+    state: present
+    update_cache: true
+
+# === Adding Flathub and and installing it's software ===
+- name: Add flathub remote if not already added
+  command: flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+  args:
+    creates: /var/lib/flatpak/repo/flathub.trustedkeys.gpg
+
+- name: Install Threema Desktop Flatpak
+  community.general.flatpak:
+    name: https://releases.threema.ch/flatpak/threema-desktop/ch.threema.threema-desktop.flatpakref
+    state: present
+
+- name: Install Flatpak applications
+  become: true
+  flatpak:
+    name:
+      - com.discordapp.Discord
+      - com.valvesoftware.Steam
+      - org.filezillaproject.Filezilla
+      - com.protonvpn.www
+      - org.inkscape.Inkscape
+      - org.gimp.GIMP
+      - page.codeberg.dnkl.foot
+      - com.rtosta.zapzap
+      - org.signal.Signal
+      - md.obsidian.Obsidian
+      - net.lutris.Lutris
+      - org.qbittorrent.qBittorrent
+      - com.obsproject.Studio
+      - dev.vencord.Vesktop
+      - com.github.iwalton3.jellyfin-media-player
+      - im.riot.Riot
+      - com.nextcloud.desktopclient.nextcloud
+      - org.raspberrypi.rpi-imager
+    state: present
+    method: system
+
+# === Installing Snap applications ===
+- name: Install Snap applications
+  become: true
+  ansible.builtin.command:
+    cmd: snap install {{ item }}
+  args:
+    creates: /snap/bin/{{ item }}
+  loop:
+    - lunatask
+
+# === Install Netdata (Nightly Channel) ===
+- name: Load Netdata environment variables
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/netdata.yml"
+    name: netdata_env
+
+- name: Download Netdata kickstart script
+  ansible.builtin.get_url:
+    url: https://get.netdata.cloud/kickstart.sh
+    dest: /tmp/netdata-kickstart.sh
+    mode: '0755'
+
+- name: Run Netdata kickstart script with claim parameters
+  ansible.builtin.command:
+    cmd: >
+      sh /tmp/netdata-kickstart.sh
+      --{{ netdata_env.NETDATA_CHANNEL }}-channel
+      --claim-token {{ netdata_env.NETDATA_CLAIM_TOKEN }}
+      --claim-rooms {{ netdata_env.NETDATA_CLAIM_ROOMS }}
+      --claim-url {{ netdata_env.NETDATA_CLAIM_URL }}
+  args:
+    creates: /usr/sbin/netdata
+  become: true
+  register: netdata_install
+
+- name: Show Netdata installation output
+  ansible.builtin.debug:
+    var: netdata_install.stdout_lines
+
+- name: Remove Netdata kickstart script
+  ansible.builtin.file:
+    path: /tmp/netdata-kickstart.sh
+    state: absent
+
+# === Start and enable Netdata service ===
+- name: Enable and start Netdata service
+  ansible.builtin.systemd:
+    name: netdata
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: true
+
