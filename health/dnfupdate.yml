@@ -1,9 +1,10 @@
 ---
-- name: DNF Updater for RHEL based Clients
+- name: DNF Updater for RHEL‑based clients
   hosts: all
   become: true
-
-- name: Upgrade all packages
-  ansible.builtin.dnf:
+  tasks:
+   - name: Upgrade all packages
+    ansible.builtin.dnf:
     name: "*"
-    state: latest
+       state: latest
+        update_cache: yes
