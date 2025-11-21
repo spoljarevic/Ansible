@@ -4,5 +4,4 @@
   gather_facts: false
   tasks:
     - name: Send an Ansible Ping
-      ansible.builtin.ping: null
-
+      ansible.builtin.ping:
