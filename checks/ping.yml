@@ -1,8 +1,7 @@
----
-
-- name: Ping every host
+- name: Ping all hosts
   hosts: all
   gather_facts: false
   tasks:
-    - name: Send an Ansible ping
-    ansible.builtin.ping: {}
+    - name: Send an Ansible Ping
+      ansible.builtin.ping: null
+
