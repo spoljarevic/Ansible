@@ -1,0 +1,9 @@
+---
+- name: DNF Updater for RHEL based Clients
+  hosts: all
+  become: true
+
+- name: Upgrade all packages
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
