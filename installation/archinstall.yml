@@ -1,0 +1,309 @@
+
+---
+- name: Arch Linux post-install setup
+  hosts: all
+  become: true
+
+- name: Install base packages with pacman
+  pacman:
+    name:
+      - rsync
+      - slurp
+      - swayimg
+      - wl-clipboard
+      - meson
+      - scdoc
+      - alsa-utils
+      - ansible
+      - baresip
+      - base
+      - base-devel
+      - bat
+      - bluez
+      - bluez-utils
+      - calc
+      - cava
+      - certbot
+      - certbot-nginx
+      - chafa
+      - darktable
+      - docker
+      - dunst
+      - fastfetch
+      - figlet
+      - filezilla
+      - fish
+      - flatpak
+      - foot
+      - git
+      - greetd
+      - grim
+      - grub
+      - hypridle
+      - hyprland
+      - hyprlock
+      - hyprpaper
+      - hyprpicker
+      - kitty
+      - lf
+      - man-db
+      - man-pages
+      - mpd
+      - mpv
+      - ncmpcpp
+      - nginx
+      - noto-fonts
+      - noto-fonts-cjk
+      - noto-fonts-emoji
+      - openssh
+      - pavucontrol
+      - piper
+      - pipewire-alsa
+      - pipewire-pulse
+      - qbittorrent
+      - qt5-wayland
+      - remmina
+      - torbrowser-launcher
+      - ttf-dejavu
+      - ttf-liberation
+      - ufw
+      - unzip
+      - vim
+      - waybar
+      - wayland
+      - wayland-protocols
+      - webkit2gtk
+      - wget
+      - whois
+      - wireguard-tools
+      - wl-clipboard
+      - wlroots
+      - wofi
+      - go
+      - proton-vpn-gtk-app
+    state: present
+    update_cache: true
+
+- name: Add flathub remote if not already added
+  command: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  args:
+    creates: /var/lib/flatpak/repo/flathub.trustedkeys.gpg
+
+- name: Install Flatpak applications
+  become: true
+  flatpak:
+    name:
+      - ch.threema.threema-desktop
+      - com.discordapp.Discord
+      - com.valvesoftware.Steam
+    state: present
+    method: system
+
+- name: Create user directories
+  file:
+    path: "/home/{{ ansible_user }}/{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  loop:
+    - downloads
+    - pictures
+    - music
+    - desktop
+
+- name: Ensure rsync is installed on target
+  package:
+    name: rsync
+    state: present
+
+
+- name: Copy ~/pictures from control to target
+  copy:
+    src: "{{ lookup('env','HOME') }}/pictures"
+    dest: "/home/{{ ansible_user }}/pictures"
+    mode: '0755'
+    remote_src: no
+  delegate_to: localhost
+  become: false
+
+- name: Set ownership of pictures directory on remote
+  file:
+    path: "/home/{{ ansible_user }}/pictures"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    recurse: yes
+
+
+- name: Clean up /tmp directory (non-sudo, only user-owned files)
+  delegate_to: localhost
+  become: false
+  shell: >
+    find /tmp -maxdepth 1 -user "$(whoami)" -type f -delete &&
+    find /tmp -maxdepth 1 -user "$(whoami)" -type d ! -path /tmp -exec rm -rf {} +
+
+- name: Remove .config directory on remote
+  file:
+    path: "/home/{{ ansible_user }}/.config"
+    state: absent
+
+- name: Recreate .config directory on target
+  file:
+    path: "/home/{{ ansible_user }}/.config"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Remove old config tarball if it exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: /tmp/configs.tar.gz
+    state: absent
+
+- name: Create a tarball of contents of .config on localhost
+  delegate_to: localhost
+  become: false
+  shell: >
+    tar czf /tmp/configs.tar.gz -C "{{ lookup('env','HOME') }}/.config" .
+
+- name: Copy tarball to remote
+  copy:
+    src: /tmp/configs.tar.gz
+    dest: /tmp/configs.tar.gz
+    force: yes
+
+- name: Extract config tarball on target
+  unarchive:
+    src: /tmp/configs.tar.gz
+    dest: "/home/{{ ansible_user }}/.config"
+    remote_src: yes
+    extra_opts: [--no-overwrite-dir]
+
+- name: Set ownership of extracted config files
+  file:
+    path: "/home/{{ ansible_user }}/.config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    recurse: yes
+
+- name: Clean up /tmp directory (non-sudo, only user-owned files)
+  delegate_to: localhost
+  become: false
+  shell: >
+    find /tmp -maxdepth 1 -user "$(whoami)" -type f -delete &&
+    find /tmp -maxdepth 1 -user "$(whoami)" -type d ! -path /tmp -exec rm -rf {} +
+
+- name: Remove pictures directory on remote
+  file:
+    path: "/home/{{ ansible_user }}/pictures"
+    state: absent
+
+- name: Recreate pictures directory on target
+  file:
+    path: "/home/{{ ansible_user }}/pictures"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Remove old config tarball if it exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: /tmp/configs.tar.gz
+    state: absent
+
+- name: Create a tarball of contents of pictures on localhost
+  delegate_to: localhost
+  become: false
+  shell: >
+    tar czf /tmp/configs.tar.gz -C "{{ lookup('env','HOME') }}/pictures" .
+
+- name: Copy tarball to remote
+  copy:
+    src: /tmp/configs.tar.gz
+    dest: /tmp/configs.tar.gz
+    force: yes
+
+- name: Extract config tarball on target
+  unarchive:
+    src: /tmp/configs.tar.gz
+    dest: "/home/{{ ansible_user }}/pictures"
+    remote_src: yes
+    extra_opts: [--no-overwrite-dir]
+
+- name: Set ownership of extracted config files
+  file:
+    path: "/home/{{ ansible_user }}/pictures"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    recurse: yes
+
+- name: Copy /usr/share/fonts from control to target
+  copy:
+    src: "/usr/share/fonts"
+    dest: "/usr/share/fonts"
+    mode: '0755'
+    remote_src: no
+  delegate_to: localhost
+
+- name: Set ownership of fonts on remote
+  file:
+    path: "/usr/share/fonts"
+    owner: root
+    group: root
+    recurse: yes
+
+- name: Ensure base-devel is installed
+  pacman:
+    name: base-devel
+    state: present
+    update_cache: true
+
+- name: Install git
+  pacman:
+    name: git
+    state: present
+
+- name: Create AUR build user
+  ansible.builtin.user:
+    name: aur_builder
+    create_home: yes
+    group: wheel
+    shell: /bin/bash
+  become: yes
+
+- name: Allow passwordless pacman for aur_builder
+  lineinfile:
+    path: /etc/sudoers.d/aur_builder
+    line: 'aur_builder ALL=(ALL) NOPASSWD: /usr/bin/pacman'
+    create: yes
+    validate: 'visudo -cf %s'
+    mode: '0644'
+  become: yes
+
+- name: Install yay with makepkg
+  kewlfft.aur.aur:
+    name: yay
+    use: makepkg
+    state: present
+  become: yes
+  become_user: aur_builder
+
+- name: Install AUR packages using yay
+  kewlfft.aur.aur:
+    use: yay
+    name:
+      - cmatrix-git
+      - onlyoffice-bin
+      - proton-mail-bin
+      - proton-pass-bin
+      - tofi
+      - vesktop-bin
+      - vscodium-bin
+      - zen-browser-bin
+      - snapd
+  become: true
+  become_user: aur_builder
