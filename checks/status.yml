@@ -1,0 +1,63 @@
+---
+- name: System Status Report for all hosts
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  tasks:
+
+    - name: Collect hostname
+      ansible.builtin.set_fact:
+        sys_hostname: "{{ ansible_hostname }}"
+
+    - name: Collect all IPv4 addresses
+      ansible.builtin.set_fact:
+        sys_ipv4: "{{ ansible_all_ipv4_addresses }}"
+
+    - name: Collect uptime
+      ansible.builtin.command: uptime -p
+      register: uptime_raw
+      changed_when: false
+
+    - name: Determine package manager
+      ansible.builtin.set_fact:
+        pkg_mgr: >-
+          {% if ansible_facts.os_family == 'Debian' %}
+          apt
+          {% else %}
+          dnf
+          {% endif %}
+
+    - name: Check pending upgrades (APT)
+      ansible.builtin.shell: "apt list --upgradable 2>/dev/null | grep -v 'Listing...'"
+      when: pkg_mgr == "apt"
+      register: pending_updates_apt
+      changed_when: false
+
+    - name: Check pending upgrades (DNF)
+      ansible.builtin.command: "dnf check-update"
+      when: pkg_mgr == "dnf"
+      register: pending_updates_dnf
+      failed_when: false
+      changed_when: false
+
+    - name: Build update list fact
+      ansible.builtin.set_fact:
+        sys_updates: >-
+            {% if pkg_mgr == "apt" %}
+            {{ pending_updates_apt.stdout_lines | default([]) }}
+            {% else %}
+            {{ pending_updates_dnf.stdout_lines | default([]) }}
+            {% endif %}
+
+
+    - name: Print system status summary
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ sys_hostname }}"
+          - "IPv4 Addresses: {{ sys_ipv4 }}"
+          - "Uptime: {{ uptime_raw.stdout }}"
+          - "Package Manager: {{ pkg_mgr }}"
+          - "Pending Updates:"
+          - "{{ sys_updates | default('Keine Updates verfügbar') }}"
+
