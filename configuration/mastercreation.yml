@@ -1,0 +1,39 @@
+---
+- name: Create a system user with sudo rights
+  hosts: all
+  become: true
+  vars:
+    # Use environment variables if running with e.g., GitHub Actions secrets
+    user_name: "{{ lookup('env', 'USR_NAME') }}"
+    user_pass: "{{ lookup('env', 'USR_PASS') }}"
+    
+  tasks:
+    - name: Ensure sudo package is installed (Debian/RHEL)
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - sudo
+      become: true
+
+    - name: Create the user
+      user:
+        name: "{{ user_name }}"
+        password: "{{ user_pass | password_hash('sha512') }}"
+        shell: /bin/bash
+        state: present
+        create_home: yes
+
+    - name: Add user to sudoers
+      user:
+        name: "{{ user_name }}"
+        groups: sudo
+        append: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Add user to wheel group (RHEL/Fedora)
+      user:
+        name: "{{ user_name }}"
+        groups: wheel
+        append: yes
+      when: ansible_os_family == "RedHat"
