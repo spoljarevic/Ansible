@@ -1,0 +1,19 @@
+---
+- name: Install and bring up Tailscale
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Install Tailscale
+      ansible.builtin.shell: |
+        curl -fsSL https://tailscale.com/install.sh | sh
+
+    - name: Bring Tailscale online
+      ansible.builtin.shell: tailscale up --auth-key={{ TAILTOKEN }}
+      register: tailscale_output
+      become: true
+
+    - name: Show Tailscale login URL
+      ansible.builtin.debug:
+        msg: "{{ tailscale_output.stdout }}"
