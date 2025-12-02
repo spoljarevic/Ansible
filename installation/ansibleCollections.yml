@@ -1,0 +1,32 @@
+---
+- name: Install useful Ansible community collections
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    collections_to_install:
+      - containers.podman
+      - community.general
+      - ansible.posix
+      - community.kubernetes
+
+  tasks:
+    - name: Ensure ansible‑galaxy is available
+      ansible.builtin.command: ansible-galaxy --version
+      register: galaxy_version
+      changed_when: false
+
+    - name: Install the required Ansible collections
+      ansible.builtin.command: >-
+        ansible-galaxy collection install {{ item }} --force
+      loop: "{{ collections_to_install }}"
+      register: install_results
+      failed_when: install_results.rc != 0
+
+    - name: Summarise installation results
+      ansible.builtin.debug:
+        msg: |
+          {% for result in install_results.results %}
+          • {{ result.item }} → {{ 'OK' if result.rc == 0 else 'FAILED' }}
+          {% endfor %}
