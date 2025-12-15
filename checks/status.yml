@@ -4,6 +4,9 @@
   gather_facts: yes
   become: yes
 
+  vars:
+    pkg_mgr: "{{ ansible_pkg_mgr }}"
+
   tasks:
 
     - name: Collect hostname
@@ -19,37 +22,44 @@
       register: uptime_raw
       changed_when: false
 
-    - name: Determine package manager
+    - name: Set pkg_mgr fact from gathered facts
       ansible.builtin.set_fact:
-        pkg_mgr: >-
-          {% if ansible_facts.os_family == 'Debian' %}
-          apt
-          {% else %}
-          dnf
-          {% endif %}
+        pkg_mgr: "{{ ansible_pkg_mgr }}"
 
     - name: Check pending upgrades (APT)
-      ansible.builtin.shell: "apt list --upgradable 2>/dev/null | grep -v 'Listing...'"
+      ansible.builtin.shell: |
+        apt list --upgradable 2>/dev/null |
+        grep -v 'Listing...'
       when: pkg_mgr == "apt"
       register: pending_updates_apt
       changed_when: false
 
-    - name: Check pending upgrades (DNF)
-      ansible.builtin.command: "dnf check-update"
-      when: pkg_mgr == "dnf"
+    - name: Check pending upgrades (DNF/YUM)
+      ansible.builtin.command: dnf check-update
+      when: pkg_mgr in ["dnf", "yum"]
       register: pending_updates_dnf
+      failed_when: false
+      changed_when: false
+
+    - name: Check pending upgrades (Pacman)
+      ansible.builtin.command: pacman -Qu
+      when: pkg_mgr == "pacman"
+      register: pending_updates_pacman
       failed_when: false
       changed_when: false
 
     - name: Build update list fact
       ansible.builtin.set_fact:
         sys_updates: >-
-            {% if pkg_mgr == "apt" %}
+          {% if pkg_mgr == "apt" %}
             {{ pending_updates_apt.stdout_lines | default([]) }}
-            {% else %}
+          {% elif pkg_mgr in ["dnf", "yum"] %}
             {{ pending_updates_dnf.stdout_lines | default([]) }}
-            {% endif %}
-
+          {% elif pkg_mgr == "pacman" %}
+            {{ pending_updates_pacman.stdout_lines | default([]) }}
+          {% else %}
+            []
+          {% endif %}
 
     - name: Print system status summary
       ansible.builtin.debug:
@@ -60,4 +70,3 @@
           - "Package Manager: {{ pkg_mgr }}"
           - "Pending Updates:"
           - "{{ sys_updates | default('Keine Updates verfügbar') }}"
-
