@@ -1,0 +1,41 @@
+---
+- name: Raspberry Pi OS post-install setup
+  hosts: all
+  become: true
+
+  vars:
+    deb_packages:
+      - curl
+      - wget
+      - git
+      - ansible
+      - vim
+      - neovim
+      - btop
+      - rsync
+      - lf
+      - cockpit
+      - cockpit-machines
+      - libvirt-daemon-system
+      - cockpit-podman
+      - podman
+      - podman-compose
+      - cockpit-storaged
+      - cockpit-packagekit
+      - network-manager
+      - firewalld
+      - udisks2
+      - pcp
+      - sudo
+      - doas
+
+  tasks:
+    - name: Ensure the apt cache is up to date
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install required Debian packages
+      ansible.builtin.apt:
+        name: "{{ deb_packages }}"
+        state: present
+        install_recommends: no
