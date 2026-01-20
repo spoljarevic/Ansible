@@ -1,3 +1,10 @@
+# Notes about this Project
+
+All the code gets published to **Codeberg**. All other platforms are just mirrors.
+
+Issues, pull requests, and everything else will only be looked at on **codeberg.org**.
+
+
 # Ansible Playbooks for Semaphore UI
 
 A curated set of Ansible playbooks designed to work seamlessly with the Semaphore CI/CD interface. The collection covers common automation tasks such as system checks, configuration, installation, and routine maintenance across various Linux distributions.
