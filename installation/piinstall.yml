@@ -6,6 +6,7 @@
   vars:
     deb_packages:
       - curl
+      - fail2ban
       - wget
       - git
       - ansible
@@ -30,6 +31,17 @@
       - doas
       - aardvark-dns
 
+    services:
+      - name: fail2ban.service
+        state: started
+        enabled: true
+      - name: cockpit.socket
+        state: started
+        enabled: true
+      - name: firewalld.service
+        state: started
+        enabled: true
+
   tasks:
     - name: Ensure the apt cache is up to date
       ansible.builtin.apt:
@@ -40,3 +52,13 @@
         name: "{{ deb_packages }}"
         state: present
         install_recommends: no
+
+    - name: Ensure selected systemd units are enabled and running
+      ansible.builtin.systemd:
+        name: "{{ item.name }}"
+        state: "{{ item.state }}"
+        enabled: "{{ item.enabled }}"
+        daemon_reload: true
+      loop: "{{ services }}"
+      register: svc_result
+      failed_when: svc_result.failed
