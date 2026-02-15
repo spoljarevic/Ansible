@@ -41,6 +41,8 @@
       - name: firewalld.service
         state: started
         enabled: true
+    ssh_port: 2204
+    fail2ban_email: alert@spoljarevic.info
 
   tasks:
     - name: Ensure the apt cache is up to date
@@ -62,3 +64,51 @@
       loop: "{{ services }}"
       register: svc_result
       failed_when: svc_result.failed
+
+    - name: Ensure SSH port is set to {{ ssh_port }}
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?Port\s+'
+        line: "Port {{ ssh_port }}"
+        state: present
+        backup: yes
+
+    - name: Disable password authentication for SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication\s+'
+        line: "PasswordAuthentication no"
+        state: present
+        backup: yes
+
+    - name: Ensure Fail2Ban jail.local exists
+      ansible.builtin.file:
+        path: /etc/fail2ban/jail.local
+        state: touch
+        mode: '0644'
+
+    - name: Add Fail2Ban DEFAULT and sshd sections
+      ansible.builtin.blockinfile:
+        path: /etc/fail2ban/jail.local
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - SSH FAIL2BAN"
+        block: |
+          [DEFAULT]
+          destemail = {{ fail2ban_email }}
+          sendername = Fail2Ban
+
+          [sshd]
+          enabled = true
+          port = {{ ssh_port }}
+          mode = aggressive
+        backup: yes
+
+    - name: Reload SSH daemon
+      ansible.builtin.service:
+        name: sshd
+        state: reloaded
+
+    - name: Reload Fail2Ban service
+      ansible.builtin.service:
+        name: fail2ban
+        state: reloaded
+
