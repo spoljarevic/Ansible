@@ -1,0 +1,227 @@
+---
+# archosinstall.yml
+# --------------------------------------------------------------
+# Automated Arch Linux installation (live‑environment) via Ansible
+# --------------------------------------------------------------
+# Run with:  ansible-playbook -i localhost, -c local archosinstall.yml
+# --------------------------------------------------------------
+
+- name: Install Arch Linux on {{ target_disk }}
+  hosts: localhost
+  connection: local
+  become: true
+  vars:
+    # ------------------------------------------------------------------
+    # Adjust these to match your hardware / preferences
+    # ------------------------------------------------------------------
+    target_disk: /dev/sda                     # Disk to wipe & install onto
+    efi_partition: "{{ target_disk }}1"       # EFI System Partition (1 GiB)
+    swap_partition: "{{ target_disk }}2"      # Swap (2 × RAM, here 2 GiB as example)
+    root_partition: "{{ target_disk }}3"      # Root (remaining space)
+
+    efi_size: 1GiB
+    swap_size: 2GiB        # Change to “{{ ansible_facts.memtotal_mb * 2 }}M” for dynamic sizing
+    locale: en_DK.UTF-8
+    keymap: de-latin1
+    timezone: Europe/Berlin
+    hostname: archhost
+    root_password: "CHANGE_ME_NOW"   # <-- replace before running!
+    # ------------------------------------------------------------------
+
+  tasks:
+
+    ##########################################################################
+    # 1️⃣  BASIC LIVE‑ENV SETTINGS (keyboard, font, network)
+    ##########################################################################
+    - name: Set German keyboard layout for the live session
+      ansible.builtin.command: loadkeys {{ keymap }}
+      changed_when: false
+
+    - name: Enlarge console font for readability
+      ansible.builtin.command: setfont ter-132b
+      changed_when: false
+
+    - name: Ensure wireless tools are available (iwctl)
+      ansible.builtin.package:
+        name: iwd
+        state: present
+
+    - name: Connect to Wi‑Fi (skip if already online)
+      ansible.builtin.shell: |
+        iwctl <<EOF
+        station wlan0 scan
+        station wlan0 get-networks
+        station wlan0 connect "{{ wifi_ssid }}"
+        EOF
+      vars:
+        wifi_ssid: "{{ lookup('env','WIFI_SSID') | default('MyWifi') }}"
+      when: ansible_default_ipv4 is not defined
+      ignore_errors: true   # continue even if already connected
+
+    ##########################################################################
+    # 2️⃣  DISK PARTITIONING (cfdisk‑style layout)
+    ##########################################################################
+    - name: Wipe existing partition table
+      community.general.parted:
+        device: "{{ target_disk }}"
+        label: gpt
+        state: blank
+
+    - name: Create EFI System partition
+      community.general.parted:
+        device: "{{ target_disk }}"
+        number: 1
+        flags: [ esp ]
+        part_start: 1MiB
+        part_end: "{{ efi_size }}"
+        name: EFI
+        state: present
+
+    - name: Create SWAP partition (double RAM – adjust as needed)
+      community.generic.parted:
+        device: "{{ target_disk }}"
+        number: 2
+        part_start: "{{ efi_size }}"
+        part_end: "{{ efi_size | int + swap_size | int }}MiB"
+        name: swap
+        state: present
+
+    - name: Create ROOT partition (rest of the disk)
+      community.general.parted:
+        device: "{{ target_disk }}"
+        number: 3
+        part_start: "{{ efi_size | int + swap_size | int }}MiB"
+        part_end: 100%
+        name: root
+        state: present
+
+    ##########################################################################
+    # 3️⃣  FORMAT PARTITIONS
+    ##########################################################################
+    - name: Format EFI partition as FAT32
+      ansible.builtin.filesystem:
+        fstype: vfat
+        dev: "{{ efi_partition }}"
+
+    - name: Initialise swap partition
+      ansible.builtin.command: mkswap {{ swap_partition }}
+      args:
+        creates: /dev/disk/by-label/swap
+
+    - name: Format root partition as ext4
+      ansible.builtin.filesystem:
+        fstype: ext4
+        dev: "{{ root_partition }}"
+
+    ##########################################################################
+    # 4️⃣  MOUNT FILESYSTEMS
+    ##########################################################################
+    - name: Mount root partition
+      ansible.builtin.mount:
+        path: /mnt
+        src: "{{ root_partition }}"
+        fstype: ext4
+        state: mounted
+
+    - name: Create and mount EFI boot directory
+      ansible.builtin.file:
+        path: /mnt/boot
+        state: directory
+        mode: '0755'
+
+    - name: Mount EFI partition
+      ansible.builtin.mount:
+        path: /mnt/boot
+        src: "{{ efi_partition }}"
+        fstype: vfat
+        opts: defaults
+        state: mounted
+
+    - name: Enable swap
+      ansible.builtin.command: swapon {{ swap_partition }}
+      changed_when: false
+
+    ##########################################################################
+    # 5️⃣  INSTALL BASE SYSTEM
+    ##########################################################################
+    - name: Install base packages with pacstrap
+      ansible.builtin.command: >
+        pacstrap -K /mnt base linux linux-firmware
+        vim networkmanager base-devel git neovim man-db man-pages
+      args:
+        creates: /mnt/etc/os-release   # pacstrap creates this file
+
+    ##########################################################################
+    # 6️⃣  Generate fstab
+    ##########################################################################
+    - name: Generate fstab
+      ansible.builtin.command: genfstab -U /mnt >> /mnt/etc/fstab
+      args:
+        creates: /mnt/etc/fstab
+
+    ##########################################################################
+    # 7️⃣  Chroot configuration
+    ##########################################################################
+    - name: Change root into new system (arch-chroot) – locale, timezone, etc.
+      ansible.builtin.shell: |
+        arch-chroot /mnt /bin/bash -c '
+          # Timezone
+          ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime &&
+          hwclock --systohc &&
+
+          # Locale generation
+          sed -i "/^#{{ locale }}/s/^#//" /etc/locale.gen &&
+          locale-gen &&
+
+          echo "LANG={{ locale }}" > /etc/locale.conf &&
+
+          # Console keymap
+          echo "KEYMAP={{ keymap }}" > /etc/vconsole.conf &&
+
+          # Hostname
+          echo "{{ hostname }}" > /etc/hostname &&
+
+          # Hosts file (basic)
+          cat <<EOF > /etc/hosts
+          127.0.0.1   localhost
+          ::1         localhost
+          127.0.1.1   {{ hostname }}.localdomain {{ hostname }}
+          EOF
+
+          # Root password (hashed via openssl)
+          echo "root:$(openssl passwd -6 {{ root_password }})" | chpasswd -e &&
+
+          # Enable essential services
+          systemctl enable NetworkManager &&
+          systemctl enable systemd-timesyncd
+        '
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    ##########################################################################
+    # 8️⃣  Bootloader (GRUB) & microcode
+    ##########################################################################
+    - name: Install GRUB, efibootmgr and Intel microcode inside chroot
+      ansible.builtin.shell: |
+        arch-chroot /mnt /bin/bash -c '
+          pacman -Sy --noconfirm grub efibootmgr intel-ucode &&
+          grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB &&
+          grub-mkconfig -o /boot/grub/grub.cfg
+        '
+      args:
+        executable: /bin/bash
+
+    ##########################################################################
+    # 9️⃣  Final reboot hint
+    ##########################################################################
+    - name: Print final instructions
+      ansible.builtin.debug:
+        msg: |
+          ------------------------------------------------------------
+          Arch installation complete! 🎉
+          • Reboot the machine:  reboot
+          • Remove the installation media.
+          • On first boot you’ll land at a login prompt (root / {{ root_password }})
+          ------------------------------------------------------------
+
