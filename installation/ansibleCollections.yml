@@ -10,6 +10,7 @@
       - community.general
       - ansible.posix
       - community.kubernetes
+      - kewlfft.aur
 
   tasks:
     - name: Ensure ansible‑galaxy is available
