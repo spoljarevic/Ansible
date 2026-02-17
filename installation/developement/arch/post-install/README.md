@@ -12,7 +12,10 @@ At the moment, the following Playbooks are tested and work in my machine.
 Please note that after a fresh arch installation you'll need to install python and python3 for Ansible to work on the remote machine.
 
 - AurInstaller - Works after installing [kewlfft.aur](https://galaxy.ansible.com/ui/repo/published/kewlfft/aur/)
-- SSHKeys - Works fine
+
+- SSHKeys - Works fine. You'll need to create a Vault via ``ansible-vault create group_vars/arch/vault.yml`` where you  add the variable ``ssh_key_passphrase: "PasswordForSSHKey"`` and execute the playbook via ``ansible-playbook -i inventory.ini -b -K --ask-vault-pass sshkeys.yml``
+
+
 
 ### Currently not working ###
 - gitclone - It fails due to a permission issue when cloning Repos via SSH (even public ones), needs more investigation
