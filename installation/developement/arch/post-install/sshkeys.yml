@@ -1,0 +1,25 @@
+---
+- name: Generate SSH openssh_keypair
+  hosts: arch_vm
+  become: true
+  vars:
+    user: arch
+
+  tasks:
+    - name: Ensure python-cryptography is installed
+      ansible.builtin.pacman:
+        name:
+          - python-cryptography
+          - python-bcrypt
+        state: present
+        update_cache: yes
+
+    - name: Generate SSH keypair for Codeberg
+      community.crypto.openssh_keypair:
+        path: /home/{{ user }}/.ssh/codeberg
+        type: ed25519
+        passphrase: "{{ ssh_key_passphrase }}"
+        mode: '0600'
+        state: present
+      become: false
+
