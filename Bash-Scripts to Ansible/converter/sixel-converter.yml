@@ -1,0 +1,40 @@
+---
+- name: Convert image to sixel and display with fastfetch
+  hosts: local
+  gather_facts: false
+
+  vars_prompt:
+    - name: file_name
+      prompt: "What's the Name of the File (Without file type)?"
+      private: no
+
+    - name: file_type
+      prompt: "What's the File Type?"
+      private: no
+
+    - name: file_width
+      prompt: "What's the Size (Width only)?"
+      private: no
+
+  vars:
+    filepath: "{{ lookup('env', 'HOME') }}/.config/fastfetch/assets"
+    file_height: "{{ (file_width | int) // 2 }}"
+
+  tasks:
+    - name: Convert image to sixel
+      ansible.builtin.shell: >
+        chafa -s {{ file_width }}x{{ file_width }}
+        {{ filepath }}/{{ file_name }}.{{ file_type }}
+        > {{ filepath }}/{{ file_name }}.sixel
+      args:
+        executable: /bin/bash
+
+    - name: Display fastfetch with sixel image
+      ansible.builtin.shell: >
+        fastfetch --raw {{ filepath }}/{{ file_name }}.sixel
+        --logo-width {{ file_height }}
+        --logo-height {{ file_height }}
+        --logo-padding-top 2
+      args:
+        executable: /bin/bash
+
