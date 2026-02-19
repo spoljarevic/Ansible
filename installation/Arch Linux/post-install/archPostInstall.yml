@@ -1,0 +1,5 @@
+---
+- name: Full playbook for a post-installation of Arch Linux
+  hosts: all
+  become: true
+  tasks:
