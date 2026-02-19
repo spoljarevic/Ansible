@@ -1,7 +1,8 @@
 ---
-- name: Convert image to sixel and display with fastfetch
+- name: Convert image to sixel for fastfetch
   hosts: local
   gather_facts: false
+  become: true
 
   vars_prompt:
     - name: file_name
@@ -21,7 +22,14 @@
     file_height: "{{ (file_width | int) // 2 }}"
 
   tasks:
+    - name: Install chafa via pacman
+      ansible.builtin.pacman:
+        name: chafa
+        state: present
+        update_cache: true
+
     - name: Convert image to sixel
+      become: false
       ansible.builtin.shell: >
         chafa -s {{ file_width }}x{{ file_width }}
         {{ filepath }}/{{ file_name }}.{{ file_type }}
@@ -29,12 +37,14 @@
       args:
         executable: /bin/bash
 
-    - name: Display fastfetch with sixel image
-      ansible.builtin.shell: >
-        fastfetch --raw {{ filepath }}/{{ file_name }}.sixel
-        --logo-width {{ file_height }}
-        --logo-height {{ file_height }}
-        --logo-padding-top 2
-      args:
-        executable: /bin/bash
+    - name: Show fastfetch command to run
+      become: false
+      ansible.builtin.debug:
+        msg: >
+          Run the following command:
+
+          fastfetch --raw {{ filepath }}/{{ file_name }}.sixel
+          --logo-width {{ file_height }}
+          --logo-height {{ file_height }}
+          --logo-padding-top 2
 
