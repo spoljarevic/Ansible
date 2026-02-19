@@ -13,7 +13,7 @@ Please note that after a fresh arch installation you'll need to install python a
 
 - AurInstaller - Works after installing [kewlfft.aur](https://galaxy.ansible.com/ui/repo/published/kewlfft/aur/)
 
-- SSHKeys - Works fine. You'll need to create a Vault via ``ansible-vault create group_vars/arch/vault.yml`` where you  add the variable ``ssh_key_passphrase: "PasswordForSSHKey"`` and execute the playbook via ``ansible-playbook -i inventory.ini -b -K --ask-vault-pass sshkeys.yml``
+- SSHKeys - Works fine. You'll need to create a Vault via ``ansible-vault create group_vars/arch/vault.yml`` where you  add the variable ``ssh_key_passphrase: "PasswordForSSHKey"`` and execute the playbook via ``ansible-playbook -i inventory.ini -b -K --ask-vault-pass snippets/sshkeys.yml``
 
 
 
