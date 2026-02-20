@@ -1,0 +1,37 @@
+---
+- name: Copy OS wallpapers to user's Pictures folder
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    wallpaper_src: /usr/share/backgrounds
+    wallpaper_dest: "{{ lookup('env','HOME') }}/Pictures/wallpaper/os"
+
+  tasks:
+
+    - name: Ensure wallpaper destination directory exists
+      ansible.builtin.file:
+        path: "{{ wallpaper_dest }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy OS wallpapers to local folder
+      ansible.builtin.copy:
+        src: "{{ wallpaper_src }}/"
+        dest: "{{ wallpaper_dest }}/"
+        remote_src: yes
+
+    - name: Show completion message
+      ansible.builtin.debug:
+        msg:
+          - "Thank's for using this script, I hope you found it useful"
+          - "Here are the wallpapers that are now in your users directory under Pictures/wallpaper/os/"
+
+    - name: List copied wallpapers
+      ansible.builtin.command: ls -1 "{{ wallpaper_dest }}"
+      register: wallpaper_list
+
+    - name: Display wallpaper list
+      ansible.builtin.debug:
+        var: wallpaper_list.stdout_lines
