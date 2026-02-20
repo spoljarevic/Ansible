@@ -1,0 +1,28 @@
+---
+- name: Setup BlackArch Repository on Arch Linux
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Ensure required tools are installed
+      pacman:
+        name:
+          - curl
+          - gnupg
+        state: present
+        update_cache: yes
+
+    - name: Download BlackArch strap script
+      get_url:
+        url: https://blackarch.org/strap.sh
+        dest: /tmp/blackarch-strap.sh
+        mode: '0755'
+
+    - name: Run BlackArch strap script (idempotent)
+      command: /tmp/blackarch-strap.sh
+      args:
+        creates: /etc/pacman.d/blackarch-mirrorlist
+
+    - name: Update pacman database
+      pacman:
+        update_cache: yes
