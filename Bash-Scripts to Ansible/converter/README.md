@@ -4,9 +4,9 @@ Just run the following command.. good luck.
 
 Use for playbooks that don't need priviliged rights
 ```
-ansible-playbook -i inventory.ini yourPlaybook.yml
+ansible-playbook yourPlaybook.yml
 ```
 Use for those who need it
 ```
-ansible-playbook -i inventory.ini yourPlaybook.yml -K
+ansible-playbook yourPlaybook.yml -K
 ```

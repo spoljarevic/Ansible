@@ -1,6 +1,7 @@
 ---
 - name: Convert image to sixel for fastfetch
-  hosts: local
+  hosts: localhost
+  connection: local
   gather_facts: false
   become: true
 
