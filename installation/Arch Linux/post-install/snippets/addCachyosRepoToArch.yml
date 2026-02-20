@@ -1,0 +1,75 @@
+---
+# playbook: cachyos-setup.yml
+# Purpose:
+#   - Import the CachyOS signing key
+#   - Install the CachyOS keyring and mirrorlist packages
+#   - Add the required CachyOS repository definitions to pacman.conf
+#   - Refresh pacman metadata
+#
+# Usage:
+#   ansible-playbook -i inventory.yml cachyos-setup.yml
+
+- name: Configure CachyOS repositories on all hosts
+  hosts: all
+  become: true  
+  vars:
+    # GPG key used to sign CachyOS packages
+    cachyos_gpg_key: "F3B607488DB35A47"
+    keyserver: "keyserver.ubuntu.com"
+
+    # Package files fetched directly from the CachyOS mirror.
+    # These provide the keyring and mirror lists needed before enabling the repo.
+    cachyos_pkg_urls:
+      - "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst"
+      - "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-22-1-any.pkg.tar.zst"
+      - "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-22-1-any.pkg.tar.zst"
+      - "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-22-1-any.pkg.tar.zst"
+
+    # Repository definitions to be appended to /etc/pacman.conf
+    pacman_repo_block: |
+      [cachyos-v4]
+      Include = /etc/pacman.d/cachyos-v4-mirrorlist
+
+      [cachyos-core-v4]
+      Include = /etc/pacman.d/cachyos-v4-mirrorlist
+
+      [cachyos-extra-v4]
+      Include = /etc/pacman.d/cachyos-v4-mirrorlist
+
+      [cachyos]
+      Include = /etc/pacman.d/cachyos-mirrorlist
+
+  tasks:
+
+    # Retrieve the CachyOS signing key from the configured keyserver
+    - name: Receive CachyOS signing key
+      ansible.builtin.command:
+        cmd: "pacman-key --recv-keys {{ cachyos_gpg_key }} --keyserver {{ keyserver }}"
+      register: recv_key
+      changed_when: "'imported' in recv_key.stdout.lower()"
+
+    # Mark the imported key as locally trusted
+    - name: Locally sign the received key
+      ansible.builtin.command:
+        cmd: "pacman-key --lsign-key {{ cachyos_gpg_key }}"
+      register: lsign_key
+      changed_when: "'locally signed' in lsign_key.stdout.lower()"
+
+    # Install the CachyOS keyring and mirrorlist packages directly from URLs
+    - name: Install CachyOS keyring and mirrorlist packages
+      ansible.builtin.pacman:
+        name: "{{ cachyos_pkg_urls }}"
+        state: present
+        force: yes 
+      register: pkg_install
+      changed_when: pkg_install.changed
+
+    # Ensure the CachyOS repositories are present in pacman.conf
+    - name: Add CachyOS repositories to pacman.conf
+      ansible.builtin.blockinfile:
+        path: /etc/pacman.conf
+        marker: "# {mark} ANSIBLE MANAGED CACHYOS REPOS"
+        block: "{{ pacman_repo_block }}"
+        insertafter: EOF
+        create: yes
+      register: conf_block
