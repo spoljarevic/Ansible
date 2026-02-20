@@ -1,5 +1,6 @@
 ---
-- hosts: localhost
+- name: Deploy WordPress with Docker
+  hosts: localhost
   connection: local
 
   tasks:
