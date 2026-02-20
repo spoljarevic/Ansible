@@ -15,3 +15,4 @@ A curated set of Ansible playbooks designed to work seamlessly with the Semaphor
 - **Configuration** – Centralized host configuration, master node creation, and system tweaks.
 - **Installation** – Automated OS installations (Arch, RHEL) and package updates (DNF).
 - **Maintenance** – Regular updates, cleanup, and other upkeep tasks.
+
