@@ -1,0 +1,49 @@
+---
+- name: Install K3s server
+  hosts: k3s-master
+  become: true
+  tasks:
+    - name: Install K3s server
+      shell: curl -sfL https://get.k3s.io | sh -
+      args:
+        executable: /bin/bash
+
+    - name: Wait for K3s server to be ready
+      wait_for:
+        path: /var/lib/rancher/k3s/server/node-token
+        timeout: 60
+
+    - name: Read K3s node token
+      shell: cat /var/lib/rancher/k3s/server/node-token
+      register: k3s_token
+      changed_when: false
+
+    - name: Set fact with K3s token
+      set_fact:
+        k3s_token_value: "{{ k3s_token.stdout }}"
+
+- name: Install K3s agents
+  hosts: k3s-workers
+  become: true
+  vars:
+    master_ip: "{{ hostvars['w2l-srv-aap'].ansible_host }}"
+    node_token: "{{ hostvars['w2l-srv-aap'].k3s_token_value }}"
+  tasks:
+    - name: Install K3s agent
+      shell: >
+        curl -sfL https://get.k3s.io | K3S_URL=https://{{ master_ip }}:6443 K3S_TOKEN={{ node_token }} sh -
+      args:
+        executable: /bin/bash
+
+- name: Verify cluster nodes
+  hosts: k3s-master
+  become: true
+  tasks:
+    - name: List all K3s nodes
+      shell: k3s kubectl get nodes
+      register: nodes
+      changed_when: false
+
+    - name: Show cluster nodes
+      debug:
+        var: nodes.stdout_lines
