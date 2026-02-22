@@ -1,0 +1,110 @@
+---
+- name: Install packages via Pacman
+  hosts: arch_vm
+  become: true
+  tasks:
+    - name: Install packages from vanilla Arch Repo
+      ansible.builtin.pacman:
+        name:
+          - alsa-utils
+          - ansible
+          - baresip
+          - base
+          - base-devel
+          - bluez
+          - bluez-utils
+          - brightnessctl
+          - btop
+          - calc
+          - cava
+          - chafa
+          - cmake
+          - cockpit
+          - cockpit-machines
+          - cockpit-packagekit
+          - cockpit-podman
+          - cockpit-storaged
+          - discord
+          - dunst
+          - element-desktop
+          - fail2ban
+          - firewalld
+          - fastfetch
+          - figlet
+          - flatpak
+          - flatseal
+          - foot
+          - kitty
+          - gimp
+          - git
+          - hypridle
+          - hyprland
+          - hyprlock
+          - hyprpaper
+          - hyprpicker
+          - hyprpoolkitagent
+          - hyprshot
+          - inkscape
+          - lf
+          - lolcat
+          - man-db
+          - man-pages
+          - monero-gui
+          - monero
+          - mpc
+          - mpd
+          - mpv
+          - mullvad-vpn
+          - nautilus
+          - ncmpcpp
+          - pavucontrol
+          - piper
+          - pipewire-alsa
+          - pipewire-pulse
+          - podlet
+          - podman
+          - podman-compose
+          - python3
+          - python-pip
+          - python-pipx
+          - qbittorrent
+          - rclone
+          - rsync
+          - swayimg
+          - unzip
+          - ly
+          - vim
+          - neovim
+          - waybar
+          - wayland
+          - wayland-protocols
+          - wget
+          - curl
+          - wl-clipboard
+          - zsh
+          
+        state: present
+        update_cache: yes
+    
+    - name: Install packages from CachyOS Repo
+      ansible.builtin.pacman:
+        name:
+          - brave-bin
+          - davinci-resolve
+          - vesktop
+          - proton-authenticator-bin
+          - proton-mail-bin
+          - proton-pass-bin
+          - proton-vpn-cli
+          - tty-clock
+          - zed
+          - zen-browser-bin
+        state: present
+        update_cache: yes
+
+    - name: Install packages from Blackarch Repo
+      ansible.builtin.pacman:
+        name:
+          - openvas
+        state: present
+        update_cache: yes

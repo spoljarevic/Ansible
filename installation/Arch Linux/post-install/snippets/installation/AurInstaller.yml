@@ -41,13 +41,7 @@
         use: yay
         name:
           - cmatrix-git
-          - onlyoffice-bin
-          - proton-mail-bin
-          - proton-pass-bin
           - tofi
-          - vesktop-bin
-          - vscodium-bin
-          - zen-browser-bin
           - snapd
       become: true
       become_user: aur_builder

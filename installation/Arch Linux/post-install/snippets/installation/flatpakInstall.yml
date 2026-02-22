@@ -1,0 +1,20 @@
+---
+- name: Install Flatpak, the remote Flathub and selected software  
+  hosts: arch_vm  
+  tasks:
+    - name: Make sure Flatpak is installed
+      pacman:
+        name:
+          - flatpak
+
+    - name: Add the Flathub Repo
+      command: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+      args:
+        creates: /var/lib/flatpak/repo/flathub.trustedkeys.gpg
+
+    - name: Install Flatpak Applications
+      become: true
+      flatpak:
+        name:
+          - com.valvesoftware.Steam
+          - network.loki.Session 

@@ -1,0 +1,23 @@
+---
+- name: Install packages via snap  
+  hosts: arch_vm 
+  gather_facts: false
+  
+  tasks:
+    - name: Ensure snapd is installed
+      pacman:
+        name: snapd
+        state: present
+
+    - name: Enable and start snapd.socket
+      systemd:
+        name: snapd.socket
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Install LunaTask via snap
+      community.general.snap:
+        name:
+          - lunatask
+        state: present
