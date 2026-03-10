@@ -1,0 +1,60 @@
+---
+- name: Deploy WordPress with Podman
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+
+    - name: Create podman network
+      containers.podman.podman_network:
+        name: wordpress
+        state: present
+
+    - name: Create wordpress volume
+      containers.podman.podman_volume:
+        name: wordpress
+        state: present
+
+    - name: Create db volume
+      containers.podman.podman_volume:
+        name: db
+        state: present
+
+    - name: Deploy MySQL container
+      containers.podman.podman_container:
+        name: db
+        image: docker.io/library/mysql:8.0
+        state: started
+        restart_policy: always
+        network:
+          - wordpress
+        volume:
+          - db:/var/lib/mysql
+        env:
+          MYSQL_DATABASE: exampledb
+          MYSQL_USER: exampleuser
+          MYSQL_PASSWORD: examplepass
+          MYSQL_RANDOM_ROOT_PASSWORD: "1"
+
+    - name: Wait 15 seconds for MySQL to initialize
+      pause:
+        seconds: 15
+
+    - name: Deploy WordPress container
+      containers.podman.podman_container:
+        name: wordpress
+        image: docker.io/library/wordpress:6.4
+        state: started
+        restart_policy: always
+        network:
+          - wordpress
+        publish:
+          - 8080:80
+        volume:
+          - wordpress:/var/www/html
+        env:
+          WORDPRESS_DB_HOST: db
+          WORDPRESS_DB_USER: exampleuser
+          WORDPRESS_DB_PASSWORD: examplepass
+          WORDPRESS_DB_NAME: exampledb

@@ -1,0 +1,69 @@
+---
+- name: Start all Podman compose stacks for the home lab
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    base_dir: "{{ lookup('env','HOME') }}/homelab"
+    compose_dirs:
+      - jellyfin
+      - audiobookshelf
+      - wordpress
+
+    root_dirs:
+      - nginx-proxy-manager
+
+  tasks:
+
+    - name: Ensure podman is installed
+      ansible.builtin.package:
+        name: podman
+        state: present
+      become: true
+
+    - name: Start rootless containers
+      block:
+        - name: Print starting message
+          ansible.builtin.debug:
+            msg: "Starting rootless containers..."
+
+        - name: Start rootless Podman compose stacks
+          ansible.builtin.shell: podman compose up -d
+          args:
+            chdir: "{{ base_dir }}/{{ item }}"
+            executable: /bin/bash
+          loop: "{{ compose_dirs }}"
+          loop_control:
+            label: "{{ item }}"
+          register: rootless_results
+
+        - name: Show started rootless stack
+          ansible.builtin.debug:
+            msg: "{{ item.item }} (rootless) started."
+          loop: "{{ rootless_results.results }}"
+
+    - name: Start root containers
+      block:
+        - name: Print starting message
+          ansible.builtin.debug:
+            msg: "Starting root containers..."
+
+        - name: Start root Podman compose stacks
+          ansible.builtin.shell: podman compose up -d
+          args:
+            chdir: "{{ base_dir }}/{{ item }}"
+          loop: "{{ root_dirs }}"
+          loop_control:
+            label: "{{ item }}"
+          become: true
+          register: root_results
+
+        - name: Show started root stack
+          ansible.builtin.debug:
+            msg: "  → {{ item.item }} (root) started."
+          loop: "{{ root_results.results }}"
+
+    - name: Final completion message
+      ansible.builtin.debug:
+        msg: "All stacks started."
