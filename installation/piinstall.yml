@@ -30,6 +30,9 @@
       - sudo
       - doas
       - aardvark-dns
+      - uidmap
+      - slirp4netns
+      - passt
 
     services:
       - name: fail2ban.service
