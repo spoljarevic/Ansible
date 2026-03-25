@@ -30,6 +30,7 @@
       - sudo
       - doas
       - aardvark-dns
+      - catatonit
 
     services:
       - name: fail2ban.service
