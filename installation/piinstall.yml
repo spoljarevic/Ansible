@@ -30,7 +30,13 @@
       - sudo
       - doas
       - aardvark-dns
+<<<<<<< HEAD
       - catatonit
+=======
+      - uidmap
+      - slirp4netns
+      - passt
+>>>>>>> f3c2d37596ba7bf48d45ce1572b64f022dbf5c8d
 
     services:
       - name: fail2ban.service
