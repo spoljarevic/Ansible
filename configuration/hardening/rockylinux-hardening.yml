@@ -1,22 +1,7 @@
 ---
-# rockylinux-hardening.yml – Baseline user, firewall, fail2ban & SSH hardening for Rocky Linux
-# -----------------------------------------------------------------------------------------
-# Run with: ansible-playbook -i <inventory> rockylinux-hardening.yml --ask-vault-pass
-#
-# Requires:
-#   • ansible.posix and community.general collections (already installed)
-#   • vault.yml in this directory, encrypted with `ansible-vault encrypt vault.yml`
-#     and containing: vault_ls_password: "<password>" and vault_hostname: "<hostname>"
-#   • A local ~/.ssh/ionos.pub on the machine running ansible-playbook
-#
-# Task order is deliberate: the SSH key and firewall port are put in place
-# BEFORE sshd is reconfigured/restarted, so a failed step can't lock you out.
-
 - name: Baseline hardening for Rocky Linux
   hosts: all
   become: true
-  vars_files:
-    - vault.yml
   vars:
     hardening_user: ls
     hardening_user_shell: /bin/bash
@@ -34,6 +19,20 @@
       - policycoreutils-python-utils
       - podman
       - neovim
+
+  pre_tasks:
+    - name: Check for a local vault.yml (CLI / ansible-vault workflow)
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/vault.yml"
+      register: local_vault_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load local vault.yml if present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/vault.yml"
+      when: local_vault_file.stat.exists
 
   tasks:
     - name: Set the server hostname
@@ -72,9 +71,6 @@
       ansible.builtin.command: firewall-cmd --set-default-zone=public
       changed_when: false
 
-    # ------------------------------------------------------------------
-    # User creation + SSH key (must happen before sshd hardening below)
-    # ------------------------------------------------------------------
     - name: Create user {{ hardening_user }} with sudo (wheel) rights
       ansible.builtin.user:
         name: "{{ hardening_user }}"
@@ -91,9 +87,6 @@
         state: present
         key: "{{ lookup('file', ssh_pubkey_path) }}"
 
-    # ------------------------------------------------------------------
-    # Firewalld – open ports before sshd starts listening on the new one
-    # ------------------------------------------------------------------
     - name: Open required ports in firewalld public zone
       ansible.posix.firewalld:
         zone: public
@@ -103,9 +96,6 @@
         state: enabled
       loop: "{{ firewall_ports }}"
 
-    # ------------------------------------------------------------------
-    # SELinux – without this, sshd refuses to bind to a non-standard port
-    # ------------------------------------------------------------------
     - name: Allow sshd to bind to the custom SSH port under SELinux
       community.general.seport:
         ports: "{{ ssh_port }}"
@@ -113,9 +103,6 @@
         setype: ssh_port_t
         state: present
 
-    # ------------------------------------------------------------------
-    # fail2ban – best-practice sshd jail
-    # ------------------------------------------------------------------
     - name: Deploy fail2ban jail.local
       ansible.builtin.copy:
         dest: /etc/fail2ban/jail.local
@@ -146,9 +133,6 @@
         state: started
         enabled: true
 
-    # ------------------------------------------------------------------
-    # SSH hardening – last step, key + firewall + SELinux are already in place
-    # ------------------------------------------------------------------
     - name: Harden sshd_config
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
