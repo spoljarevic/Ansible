@@ -1,0 +1,177 @@
+---
+# rockylinux-hardening.yml – Baseline user, firewall, fail2ban & SSH hardening for Rocky Linux
+# -----------------------------------------------------------------------------------------
+# Run with: ansible-playbook -i <inventory> rockylinux-hardening.yml --ask-vault-pass
+#
+# Requires:
+#   • ansible.posix and community.general collections (already installed)
+#   • vault.yml in this directory, encrypted with `ansible-vault encrypt vault.yml`
+#     and containing: vault_ls_password: "<password>" and vault_hostname: "<hostname>"
+#   • A local ~/.ssh/ionos.pub on the machine running ansible-playbook
+#
+# Task order is deliberate: the SSH key and firewall port are put in place
+# BEFORE sshd is reconfigured/restarted, so a failed step can't lock you out.
+
+- name: Baseline hardening for Rocky Linux
+  hosts: all
+  become: true
+  vars_files:
+    - vault.yml
+  vars:
+    hardening_user: ls
+    hardening_user_shell: /bin/bash
+    ssh_pubkey_path: "~/.ssh/ionos.pub"
+    ssh_port: 2204
+    firewall_ports:
+      - "80/tcp"
+      - "443/tcp"
+      - "{{ ssh_port }}/tcp"
+    baseline_packages:
+      - firewalld
+      - fail2ban
+      - chrony
+      - dnf-automatic
+      - policycoreutils-python-utils
+      - podman
+      - neovim
+
+  tasks:
+    - name: Set the server hostname
+      ansible.builtin.hostname:
+        name: "{{ vault_hostname }}"
+
+    - name: Install EPEL repository (required for fail2ban on Rocky Linux)
+      ansible.builtin.dnf:
+        name: epel-release
+        state: present
+
+    - name: Install baseline packages
+      ansible.builtin.dnf:
+        name: "{{ baseline_packages }}"
+        state: present
+
+    - name: Enable and start chronyd (time sync, needed for accurate fail2ban bans/logs)
+      ansible.builtin.service:
+        name: chronyd
+        state: started
+        enabled: true
+
+    - name: Enable and start dnf-automatic timer (unattended security updates)
+      ansible.builtin.systemd:
+        name: dnf-automatic.timer
+        state: started
+        enabled: true
+
+    - name: Enable and start firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Set firewalld default zone to public
+      ansible.builtin.command: firewall-cmd --set-default-zone=public
+      changed_when: false
+
+    # ------------------------------------------------------------------
+    # User creation + SSH key (must happen before sshd hardening below)
+    # ------------------------------------------------------------------
+    - name: Create user {{ hardening_user }} with sudo (wheel) rights
+      ansible.builtin.user:
+        name: "{{ hardening_user }}"
+        password: "{{ vault_ls_password | password_hash('sha512') }}"
+        shell: "{{ hardening_user_shell }}"
+        create_home: true
+        groups: wheel
+        append: true
+        state: present
+
+    - name: Deploy authorized SSH key for {{ hardening_user }}
+      ansible.posix.authorized_key:
+        user: "{{ hardening_user }}"
+        state: present
+        key: "{{ lookup('file', ssh_pubkey_path) }}"
+
+    # ------------------------------------------------------------------
+    # Firewalld – open ports before sshd starts listening on the new one
+    # ------------------------------------------------------------------
+    - name: Open required ports in firewalld public zone
+      ansible.posix.firewalld:
+        zone: public
+        port: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: enabled
+      loop: "{{ firewall_ports }}"
+
+    # ------------------------------------------------------------------
+    # SELinux – without this, sshd refuses to bind to a non-standard port
+    # ------------------------------------------------------------------
+    - name: Allow sshd to bind to the custom SSH port under SELinux
+      community.general.seport:
+        ports: "{{ ssh_port }}"
+        proto: tcp
+        setype: ssh_port_t
+        state: present
+
+    # ------------------------------------------------------------------
+    # fail2ban – best-practice sshd jail
+    # ------------------------------------------------------------------
+    - name: Deploy fail2ban jail.local
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.local
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [DEFAULT]
+          bantime  = 1h
+          findtime = 10m
+          maxretry = 5
+          backend  = systemd
+          ignoreip = 127.0.0.1/8 ::1
+
+          [sshd]
+          enabled  = true
+          port     = {{ ssh_port }}
+          filter   = sshd
+          backend  = systemd
+          maxretry = 5
+          bantime  = 1h
+          findtime = 10m
+      notify: Reload fail2ban
+
+    - name: Enable and start fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    # ------------------------------------------------------------------
+    # SSH hardening – last step, key + firewall + SELinux are already in place
+    # ------------------------------------------------------------------
+    - name: Harden sshd_config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+        validate: /usr/sbin/sshd -t -f %s
+      loop:
+        - { regexp: "^#?Port\\s", line: "Port {{ ssh_port }}" }
+        - { regexp: "^#?PermitRootLogin\\s", line: "PermitRootLogin no" }
+        - { regexp: "^#?PasswordAuthentication\\s", line: "PasswordAuthentication no" }
+        - { regexp: "^#?PubkeyAuthentication\\s", line: "PubkeyAuthentication yes" }
+        - { regexp: "^#?ChallengeResponseAuthentication\\s", line: "ChallengeResponseAuthentication no" }
+        - { regexp: "^#?KbdInteractiveAuthentication\\s", line: "KbdInteractiveAuthentication no" }
+      notify: Reload sshd
+
+  handlers:
+    - name: Reload fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: reloaded
+
+    - name: Reload sshd
+      ansible.builtin.service:
+        name: sshd
+        state: reloaded

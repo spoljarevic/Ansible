@@ -1,0 +1,3 @@
+---
+vault_ls_password: "CHANGE_ME_before_encrypting"
+vault_hostname: initial-srv-service
