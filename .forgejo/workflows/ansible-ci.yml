@@ -1,0 +1,161 @@
+---
+name: Ansible CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ANSIBLE_FORCE_COLOR: "1"
+  PY_COLORS: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # 1. Formatting / style: yamllint + ansible-lint (production profile)
+  lint:
+    name: Lint (yamllint + ansible-lint)
+    runs-on: docker
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+
+      - name: Install linters
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq python3-venv >/dev/null
+          python3 -m venv /opt/ansible
+          /opt/ansible/bin/pip install -q ansible-lint yamllint
+          echo "/opt/ansible/bin" >> "$GITHUB_PATH"
+
+      - name: Use example vaults (CI never sees real secrets)
+        run: |
+          find . -name example-vault.yml -print0 | while IFS= read -r -d '' f; do
+            cp "$f" "$(dirname "$f")/vault.yml"
+          done
+
+      - name: yamllint
+        run: yamllint --strict .
+
+      - name: ansible-lint
+        if: success() || failure()
+        run: ansible-lint
+
+  # 2. Every playbook must parse and resolve all modules/collections
+  syntax:
+    name: Syntax check
+    runs-on: docker
+    container:
+      image: node:20-bookworm
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+
+      - name: Install ansible-core and collections
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq python3-venv >/dev/null
+          python3 -m venv /opt/ansible
+          /opt/ansible/bin/pip install -q ansible-core
+          /opt/ansible/bin/ansible-galaxy collection install -r requirements.yml
+          echo "/opt/ansible/bin" >> "$GITHUB_PATH"
+
+      - name: Use example vaults (CI never sees real secrets)
+        run: |
+          find . -name example-vault.yml -print0 | while IFS= read -r -d '' f; do
+            cp "$f" "$(dirname "$f")/vault.yml"
+          done
+
+      - name: ansible-playbook --syntax-check
+        run: |
+          printf 'localhost ansible_connection=local\n' > /tmp/inventory
+          rc=0
+          while IFS= read -r -d '' pb; do
+            echo "::group::$pb"
+            if ansible-playbook -i /tmp/inventory --syntax-check "$pb"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error file=$pb::syntax check failed"
+              rc=1
+            fi
+          done < <(python3 .forgejo/scripts/list-playbooks.py)
+          exit $rc
+
+  # 3. Actually execute playbooks (check mode) inside a container of the
+  #    distro they are written for, against localhost.
+  #    Playbooks that need systemd, real disks, hostnames or external
+  #    services can't run in a container and are covered by lint + syntax only.
+  run:
+    name: Check-mode run (${{ matrix.distro }})
+    needs: syntax
+    runs-on: docker
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: rocky
+            image: docker.io/rockylinux/rockylinux:9
+            setup: |
+              dnf -y -q module enable nodejs:20
+              dnf -y -q install nodejs git iproute python3 python3.12 python3.12-pip
+              python3.12 -m venv /opt/ansible
+            playbooks: |
+              checks/ping.yml
+              checks/status.yml
+              health/dnfupdate.yml
+              configuration/usercreation.yml
+              Bash-Scripts to Ansible/extractor/osImageExtractor.yml
+
+          - distro: arch
+            image: docker.io/library/archlinux:latest
+            setup: |
+              pacman -Syu --noconfirm --needed nodejs git iproute2 python sudo
+              python -m venv /opt/ansible
+            playbooks: |
+              checks/ping.yml
+              checks/status.yml
+              installation/addCachyosRepoToArch.yml
+              Bash-Scripts to Ansible/converter/sixel-converter.yml
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Prepare container
+        run: ${{ matrix.setup }}
+
+      - uses: https://code.forgejo.org/actions/checkout@v4
+
+      - name: Install ansible-core and collections
+        run: |
+          /opt/ansible/bin/pip install -q ansible-core
+          /opt/ansible/bin/ansible-galaxy collection install -r requirements.yml
+          echo "/opt/ansible/bin" >> "$GITHUB_PATH"
+
+      - name: Use example vaults (CI never sees real secrets)
+        run: |
+          find . -name example-vault.yml -print0 | while IFS= read -r -d '' f; do
+            cp "$f" "$(dirname "$f")/vault.yml"
+          done
+
+      - name: Run playbooks in check mode
+        env:
+          PLAYBOOKS: ${{ matrix.playbooks }}
+        run: |
+          # Modules run with the distro's own python so dnf/apt bindings are found
+          printf 'localhost ansible_connection=local ansible_python_interpreter=/usr/bin/python3\n' > /tmp/inventory
+          rc=0
+          while IFS= read -r pb; do
+            [ -n "$pb" ] || continue
+            echo "::group::$pb"
+            if ansible-playbook -i /tmp/inventory --check --diff "$pb"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error file=$pb::check-mode run failed on ${{ matrix.distro }}"
+              rc=1
+            fi
+          done <<< "$PLAYBOOKS"
+          exit $rc
