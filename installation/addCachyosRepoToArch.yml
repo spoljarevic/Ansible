@@ -11,7 +11,7 @@
 
 - name: Configure CachyOS repositories on all hosts
   hosts: all
-  become: true  
+  become: true
   vars:
     # GPG key used to sign CachyOS packages
     cachyos_gpg_key: "F3B607488DB35A47"
@@ -40,7 +40,6 @@
       Include = /etc/pacman.d/cachyos-mirrorlist
 
   tasks:
-
     # Retrieve the CachyOS signing key from the configured keyserver
     - name: Receive CachyOS signing key
       ansible.builtin.command:
@@ -57,11 +56,10 @@
 
     # Install the CachyOS keyring and mirrorlist packages directly from URLs
     - name: Install CachyOS keyring and mirrorlist packages
-      ansible.builtin.pacman:
+      community.general.pacman:
         name: "{{ cachyos_pkg_urls }}"
         state: present
-        upgrade: no
-        force: yes 
+        force: true
       register: pkg_install
       changed_when: pkg_install.changed
 
@@ -72,23 +70,22 @@
         marker: "# {mark} ANSIBLE MANAGED CACHYOS REPOS"
         block: "{{ pacman_repo_block }}"
         insertafter: EOF
-        create: yes
+        create: true
+        mode: "0644"
       register: conf_block
 
     # Clear the local pacman package cache
     - name: Clear pacman cache
       ansible.builtin.command:
         cmd: "pacman -Scc --noconfirm"
-      args:
-        warn: false
       register: cache_clean
       changed_when: "'removing' in cache_clean.stdout.lower()"
 
     # Refresh the pacman sync database so new repositories are available
     - name: Refresh pacman database
-      ansible.builtin.pacman:
-        update_cache: yes
-        upgrade: no
+      community.general.pacman:
+        update_cache: true
+        upgrade: false
       register: sync_update
 
     # Provide a short summary of what the playbook did
@@ -100,4 +97,3 @@
           Repository block added or already present: {{ conf_block.changed }}
           Pacman cache cleared: {{ cache_clean.changed }}
           Pacman database refreshed: {{ sync_update.changed }}
-

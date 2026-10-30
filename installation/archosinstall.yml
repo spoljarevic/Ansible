@@ -14,22 +14,21 @@
     # ------------------------------------------------------------------
     # Adjust these to match your hardware / preferences
     # ------------------------------------------------------------------
-    target_disk: /dev/sda                     # Disk to wipe & install onto
-    efi_partition: "{{ target_disk }}1"       # EFI System Partition (1 GiB)
-    swap_partition: "{{ target_disk }}2"      # Swap (2 × RAM, here 2 GiB as example)
-    root_partition: "{{ target_disk }}3"      # Root (remaining space)
+    target_disk: /dev/sda # Disk to wipe & install onto
+    efi_partition: "{{ target_disk }}1" # EFI System Partition (1 GiB)
+    swap_partition: "{{ target_disk }}2" # Swap (2 × RAM, here 2 GiB as example)
+    root_partition: "{{ target_disk }}3" # Root (remaining space)
 
     efi_size: 1GiB
-    swap_size: 2GiB        # Change to “{{ ansible_facts.memtotal_mb * 2 }}M” for dynamic sizing
+    swap_size: 2GiB # Change to “{{ ansible_facts.memtotal_mb * 2 }}M” for dynamic sizing
     locale: en_DK.UTF-8
     keymap: de-latin1
     timezone: Europe/Berlin
     hostname: archhost
-    root_password: "CHANGE_ME_NOW"   # <-- replace before running!
+    root_password: "CHANGE_ME_NOW" # <-- replace before running!
     # ------------------------------------------------------------------
 
   tasks:
-
     ##########################################################################
     # 1️⃣  BASIC LIVE‑ENV SETTINGS (keyboard, font, network)
     ##########################################################################
@@ -54,9 +53,10 @@
         station wlan0 connect "{{ wifi_ssid }}"
         EOF
       vars:
-        wifi_ssid: "{{ lookup('env','WIFI_SSID') | default('MyWifi') }}"
+        wifi_ssid: "{{ lookup('env', 'WIFI_SSID') | default('MyWifi') }}"
       when: ansible_default_ipv4 is not defined
-      ignore_errors: true   # continue even if already connected
+      changed_when: true
+      failed_when: false
 
     ##########################################################################
     # 2️⃣  DISK PARTITIONING (cfdisk‑style layout)
@@ -71,14 +71,14 @@
       community.general.parted:
         device: "{{ target_disk }}"
         number: 1
-        flags: [ esp ]
+        flags: [esp]
         part_start: 1MiB
         part_end: "{{ efi_size }}"
         name: EFI
         state: present
 
     - name: Create SWAP partition (double RAM – adjust as needed)
-      community.generic.parted:
+      community.general.parted:
         device: "{{ target_disk }}"
         number: 2
         part_start: "{{ efi_size }}"
@@ -99,7 +99,7 @@
     # 3️⃣  FORMAT PARTITIONS
     ##########################################################################
     - name: Format EFI partition as FAT32
-      ansible.builtin.filesystem:
+      community.general.filesystem:
         fstype: vfat
         dev: "{{ efi_partition }}"
 
@@ -109,7 +109,7 @@
         creates: /dev/disk/by-label/swap
 
     - name: Format root partition as ext4
-      ansible.builtin.filesystem:
+      community.general.filesystem:
         fstype: ext4
         dev: "{{ root_partition }}"
 
@@ -117,7 +117,7 @@
     # 4️⃣  MOUNT FILESYSTEMS
     ##########################################################################
     - name: Mount root partition
-      ansible.builtin.mount:
+      ansible.posix.mount:
         path: /mnt
         src: "{{ root_partition }}"
         fstype: ext4
@@ -127,10 +127,10 @@
       ansible.builtin.file:
         path: /mnt/boot
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Mount EFI partition
-      ansible.builtin.mount:
+      ansible.posix.mount:
         path: /mnt/boot
         src: "{{ efi_partition }}"
         fstype: vfat
@@ -149,7 +149,7 @@
         pacstrap -K /mnt base linux linux-firmware
         vim networkmanager base-devel git neovim man-db man-pages
       args:
-        creates: /mnt/etc/os-release   # pacstrap creates this file
+        creates: /mnt/etc/os-release # pacstrap creates this file
 
     ##########################################################################
     # 6️⃣  Generate fstab
@@ -164,6 +164,7 @@
     ##########################################################################
     - name: Change root into new system (arch-chroot) – locale, timezone, etc.
       ansible.builtin.shell: |
+        set -o pipefail
         arch-chroot /mnt /bin/bash -c '
           # Timezone
           ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime &&
@@ -211,6 +212,7 @@
         '
       args:
         executable: /bin/bash
+      changed_when: true
 
     ##########################################################################
     # 9️⃣  Final reboot hint
@@ -224,4 +226,3 @@
           • Remove the installation media.
           • On first boot you’ll land at a login prompt (root / {{ root_password }})
           ------------------------------------------------------------
-

@@ -4,14 +4,14 @@
   become: true
 
   vars:
-    k3s_version: ""        # e.g. v1.29.1+k3s1
-    k3s_extra_args: ""     # e.g. "--disable traefik"
+    k3s_version: "" # e.g. v1.29.1+k3s1
+    k3s_extra_args: "" # e.g. "--disable traefik"
 
     local_kubeconfig_path: "{{ lookup('env','HOME') }}/.kube/k3s-{{ inventory_hostname }}.yaml"
 
   pre_tasks:
     - name: Install core utilities (cross-platform)
-      package:
+      ansible.builtin.package:
         name:
           - curl
           - ca-certificates
@@ -20,13 +20,13 @@
 
   tasks:
     - name: Download k3s install script
-      get_url:
+      ansible.builtin.get_url:
         url: https://get.k3s.io
         dest: /tmp/install_k3s.sh
-        mode: '0755'
+        mode: "0755"
 
     - name: Run the k3s installer
-      shell: sh /tmp/install_k3s.sh
+      ansible.builtin.command: sh /tmp/install_k3s.sh
       environment:
         INSTALL_K3S_VERSION: "{{ k3s_version | default(omit) }}"
         INSTALL_K3S_EXEC: "{{ k3s_extra_args | default(omit) }}"
@@ -34,26 +34,26 @@
         creates: /etc/rancher/k3s/k3s.yaml
 
     - name: Ensure k3s service is enabled and started
-      systemd:
+      ansible.builtin.systemd:
         name: k3s
         enabled: true
         state: started
 
     - name: Wait for kubeconfig file
-      wait_for:
+      ansible.builtin.wait_for:
         path: /etc/rancher/k3s/k3s.yaml
         timeout: 60
 
     - name: Ensure local kubeconfig directory exists
       delegate_to: localhost
       become: false
-      file:
+      ansible.builtin.file:
         path: "{{ local_kubeconfig_path | dirname }}"
         state: directory
-        mode: '0700'
+        mode: "0700"
 
     - name: Fetch kubeconfig to control machine
-      fetch:
+      ansible.builtin.fetch:
         src: /etc/rancher/k3s/k3s.yaml
         dest: "{{ local_kubeconfig_path }}"
         flat: true
@@ -61,25 +61,25 @@
     - name: Adjust kubeconfig server address
       delegate_to: localhost
       become: false
-      replace:
+      ansible.builtin.replace:
         path: "{{ local_kubeconfig_path }}"
-        regexp: 'https://127\.0\.0\.1:6443'
+        regexp: "https://127\\.0\\.0\\.1:6443"
         replace: "https://{{ inventory_hostname }}:6443"
 
   post_tasks:
     - name: Show kubeconfig location
-      debug:
+      ansible.builtin.debug:
         msg: "Kubeconfig for {{ inventory_hostname }} stored at {{ local_kubeconfig_path }}"
 
     - name: Verify cluster health
       delegate_to: localhost
       become: false
-      command: kubectl --kubeconfig {{ local_kubeconfig_path }} version --short
+      ansible.builtin.command: kubectl --kubeconfig {{ local_kubeconfig_path }} version --short
       register: kubectl_out
       changed_when: false
       failed_when: false
 
     - name: Print kubectl output
       delegate_to: localhost
-      debug:
+      ansible.builtin.debug:
         var: kubectl_out.stdout_lines

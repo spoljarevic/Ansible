@@ -5,7 +5,7 @@
   gather_facts: false
 
   vars:
-    textInput:
+    text_input:
       - Spoljarevic
       - Who2Industries
       - Stay private. Stay root.
@@ -15,7 +15,6 @@
     figlet_font_url: https://raw.githubusercontent.com/xero/figlet-fonts/main/ANSI%20Shadow.flf
 
   tasks:
-
     - name: Ensure figlet is installed
       ansible.builtin.package:
         name: figlet
@@ -26,22 +25,22 @@
       ansible.builtin.file:
         path: "{{ figlet_font_dir }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
       become: true
 
     - name: Download ansishadow font if missing
       ansible.builtin.get_url:
         url: "{{ figlet_font_url }}"
         dest: "{{ figlet_font_dir }}/{{ figlet_font_file }}"
-        mode: '0644'
-        force: no
+        mode: "0644"
+        force: false
       become: true
 
     - name: Create ASCII output directory
       ansible.builtin.file:
         path: "{{ ascii_output_dir }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Generate ASCII art files
       ansible.builtin.shell: >
@@ -49,10 +48,11 @@
         > "{{ ascii_output_dir }}/{{ item | regex_replace('[^a-zA-Z0-9_-]', '_') }}.txt"
       args:
         executable: /bin/bash
-      loop: "{{ textInput }}"
+      loop: "{{ text_input }}"
       register: ascii_results
+      changed_when: true
 
     - name: Show created files
       ansible.builtin.debug:
         msg: "Created file: {{ ascii_output_dir }}/{{ item | regex_replace('[^a-zA-Z0-9_-]', '_') }}.txt"
-      loop: "{{ textInput }}"
+      loop: "{{ text_input }}"

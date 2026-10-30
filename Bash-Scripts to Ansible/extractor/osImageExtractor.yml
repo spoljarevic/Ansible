@@ -9,18 +9,18 @@
     wallpaper_dest: "{{ lookup('env','HOME') }}/Pictures/wallpaper/os"
 
   tasks:
-
     - name: Ensure wallpaper destination directory exists
       ansible.builtin.file:
         path: "{{ wallpaper_dest }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Copy OS wallpapers to local folder
       ansible.builtin.copy:
         src: "{{ wallpaper_src }}/"
         dest: "{{ wallpaper_dest }}/"
-        remote_src: yes
+        remote_src: true
+        mode: preserve
 
     - name: Show completion message
       ansible.builtin.debug:
@@ -31,6 +31,7 @@
     - name: List copied wallpapers
       ansible.builtin.command: ls -1 "{{ wallpaper_dest }}"
       register: wallpaper_list
+      changed_when: false
 
     - name: Display wallpaper list
       ansible.builtin.debug:

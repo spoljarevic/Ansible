@@ -5,7 +5,6 @@
   gather_facts: false
 
   tasks:
-
     - name: Create podman network
       containers.podman.podman_network:
         name: wordpress
@@ -38,7 +37,7 @@
           MYSQL_RANDOM_ROOT_PASSWORD: "1"
 
     - name: Wait 15 seconds for MySQL to initialize
-      pause:
+      ansible.builtin.pause:
         seconds: 15
 
     - name: Deploy WordPress container

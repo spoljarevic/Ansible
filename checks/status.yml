@@ -1,14 +1,13 @@
 ---
 - name: System Status Report for all hosts
   hosts: all
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
 
   vars:
     pkg_mgr: "{{ ansible_pkg_mgr }}"
 
   tasks:
-
     - name: Collect hostname
       ansible.builtin.set_fact:
         sys_hostname: "{{ ansible_hostname }}"
@@ -28,11 +27,15 @@
 
     - name: Check pending upgrades (APT)
       ansible.builtin.shell: |
+        set -o pipefail
         apt list --upgradable 2>/dev/null |
         grep -v 'Listing...'
+      args:
+        executable: /bin/bash
       when: pkg_mgr == "apt"
       register: pending_updates_apt
       changed_when: false
+      failed_when: pending_updates_apt.rc > 1
 
     - name: Check pending upgrades (DNF/YUM)
       ansible.builtin.command: dnf check-update

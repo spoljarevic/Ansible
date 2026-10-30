@@ -5,13 +5,21 @@
   gather_facts: false
 
   tasks:
+    - name: Download the Tailscale install script
+      ansible.builtin.get_url:
+        url: https://tailscale.com/install.sh
+        dest: /tmp/tailscale-install.sh
+        mode: "0755"
+
     - name: Install Tailscale
-      ansible.builtin.shell: |
-        curl -fsSL https://tailscale.com/install.sh | sh
+      ansible.builtin.command: /tmp/tailscale-install.sh
+      args:
+        creates: /usr/bin/tailscale
 
     - name: Bring Tailscale online
-      ansible.builtin.shell: tailscale up --auth-key={{ TAILTOKEN }}
+      ansible.builtin.command: tailscale up --auth-key={{ TAILTOKEN }}
       register: tailscale_output
+      changed_when: true
       become: true
 
     - name: Show Tailscale login URL

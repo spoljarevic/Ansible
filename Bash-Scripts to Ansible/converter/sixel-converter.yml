@@ -8,15 +8,15 @@
   vars_prompt:
     - name: file_name
       prompt: "What's the Name of the File (Without file type)?"
-      private: no
+      private: false
 
     - name: file_type
       prompt: "What's the File Type?"
-      private: no
+      private: false
 
     - name: file_width
       prompt: "What's the Size (Width only)?"
-      private: no
+      private: false
 
   vars:
     filepath: "{{ lookup('env', 'HOME') }}/.config/fastfetch/assets"
@@ -24,7 +24,7 @@
 
   tasks:
     - name: Install chafa via pacman
-      ansible.builtin.pacman:
+      community.general.pacman:
         name: chafa
         state: present
         update_cache: true
@@ -37,6 +37,7 @@
         > {{ filepath }}/{{ file_name }}.sixel
       args:
         executable: /bin/bash
+      changed_when: true
 
     - name: Show fastfetch command to run
       become: false
@@ -48,4 +49,3 @@
           --logo-width {{ file_height }}
           --logo-height {{ file_height }}
           --logo-padding-top 2
-

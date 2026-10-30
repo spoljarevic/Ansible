@@ -51,13 +51,13 @@
   tasks:
     - name: Ensure the apt cache is up to date
       ansible.builtin.apt:
-        update_cache: yes
+        update_cache: true
 
     - name: Install required Debian packages
       ansible.builtin.apt:
         name: "{{ deb_packages }}"
         state: present
-        install_recommends: no
+        install_recommends: false
 
     - name: Ensure selected systemd units are enabled and running
       ansible.builtin.systemd:
@@ -72,24 +72,24 @@
     - name: Ensure SSH port is set to {{ ssh_port }}
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
-        regexp: '^#?Port\s+'
+        regexp: "^#?Port\\s+"
         line: "Port {{ ssh_port }}"
         state: present
-        backup: yes
+        backup: true
 
     - name: Disable password authentication for SSH
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
-        regexp: '^#?PasswordAuthentication\s+'
+        regexp: "^#?PasswordAuthentication\\s+"
         line: "PasswordAuthentication no"
         state: present
-        backup: yes
+        backup: true
 
     - name: Ensure Fail2Ban jail.local exists
       ansible.builtin.file:
         path: /etc/fail2ban/jail.local
         state: touch
-        mode: '0644'
+        mode: "0644"
 
     - name: Add Fail2Ban DEFAULT and sshd sections
       ansible.builtin.blockinfile:
@@ -104,7 +104,7 @@
           enabled = true
           port = {{ ssh_port }}
           mode = aggressive
-        backup: yes
+        backup: true
 
     - name: Reload SSH daemon
       ansible.builtin.service:
@@ -115,4 +115,3 @@
       ansible.builtin.service:
         name: fail2ban
         state: reloaded
-

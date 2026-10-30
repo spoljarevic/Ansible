@@ -23,6 +23,7 @@
         ansible-galaxy collection install {{ item }} --force
       loop: "{{ collections_to_install }}"
       register: install_results
+      changed_when: true
       failed_when: install_results.rc != 0
 
     - name: Summarise installation results

@@ -59,7 +59,7 @@
       ansible.builtin.command: firewall-cmd --set-default-zone=public
       changed_when: false
 
-    - name: Create user {{ hardening_user }} with sudo (wheel) rights
+    - name: Create sudo (wheel) user {{ hardening_user }}
       ansible.builtin.user:
         name: "{{ hardening_user }}"
         password: "{{ vault_ls_password | password_hash('sha512') }}"

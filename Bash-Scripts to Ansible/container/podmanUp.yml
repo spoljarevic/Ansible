@@ -15,7 +15,6 @@
       - nginx-proxy-manager
 
   tasks:
-
     - name: Ensure podman is installed
       ansible.builtin.package:
         name: podman
@@ -37,6 +36,7 @@
           loop_control:
             label: "{{ item }}"
           register: rootless_results
+          changed_when: true
 
         - name: Show started rootless stack
           ansible.builtin.debug:
@@ -50,7 +50,7 @@
             msg: "Starting root containers..."
 
         - name: Start root Podman compose stacks
-          ansible.builtin.shell: podman compose up -d
+          ansible.builtin.command: podman compose up -d
           args:
             chdir: "{{ base_dir }}/{{ item }}"
           loop: "{{ root_dirs }}"
@@ -58,6 +58,7 @@
             label: "{{ item }}"
           become: true
           register: root_results
+          changed_when: true
 
         - name: Show started root stack
           ansible.builtin.debug:

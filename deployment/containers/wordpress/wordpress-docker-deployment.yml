@@ -4,7 +4,6 @@
   connection: local
 
   tasks:
-
     - name: Create network
       community.docker.docker_network:
         name: wordpress
@@ -33,7 +32,7 @@
         restart_policy: always
 
     - name: Wait 15 seconds for MySQL
-      pause:
+      ansible.builtin.pause:
         seconds: 15
 
     - name: Deploy WordPress
