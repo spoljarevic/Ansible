@@ -103,6 +103,9 @@ jobs:
               dnf -y -q module enable nodejs:20
               dnf -y -q install nodejs git iproute python3 python3.12 python3.12-pip
               python3.12 -m venv /opt/ansible
+              /opt/ansible/bin/pip install -q ansible-core
+              /opt/ansible/bin/ansible-galaxy collection install community.general
+              echo "/opt/ansible/bin" >> "$GITHUB_PATH"
             playbooks: |
               checks/ping.yml
               checks/status.yml
@@ -113,13 +116,16 @@ jobs:
           - distro: arch
             image: docker.io/library/archlinux:latest
             setup: |
-              pacman -Syu --noconfirm --needed nodejs git iproute2 python sudo
-              python -m venv /opt/ansible
+              pacman-key --init
+              pacman-key --populate archlinux
+              pacman -Syu --noconfirm --needed nodejs git iproute2 python sudo ansible
             playbooks: |
               checks/ping.yml
               checks/status.yml
-              installation/addCachyosRepoToArch.yml
               Bash-Scripts to Ansible/converter/sixel-converter.yml
+            # Run for real: the container is thrown away afterwards
+            apply: |
+              installation/addCachyosRepoToArch.yml
     container:
       image: ${{ matrix.image }}
     steps:
@@ -127,12 +133,6 @@ jobs:
         run: ${{ matrix.setup }}
 
       - uses: https://code.forgejo.org/actions/checkout@v4
-
-      - name: Install ansible-core and collections
-        run: |
-          /opt/ansible/bin/pip install -q ansible-core
-          /opt/ansible/bin/ansible-galaxy collection install -r requirements.yml
-          echo "/opt/ansible/bin" >> "$GITHUB_PATH"
 
       - name: Use example vaults (CI never sees real secrets)
         run: |
@@ -155,6 +155,25 @@ jobs:
             else
               echo "::endgroup::"
               echo "::error file=$pb::check-mode run failed on ${{ matrix.distro }}"
+              rc=1
+            fi
+          done <<< "$PLAYBOOKS"
+          exit $rc
+
+      - name: Run playbooks for real
+        if: success() || failure()
+        env:
+          PLAYBOOKS: ${{ matrix.apply }}
+        run: |
+          rc=0
+          while IFS= read -r pb; do
+            [ -n "$pb" ] || continue
+            echo "::group::$pb"
+            if ansible-playbook -i /tmp/inventory --diff "$pb"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error file=$pb::run failed on ${{ matrix.distro }}"
               rc=1
             fi
           done <<< "$PLAYBOOKS"
