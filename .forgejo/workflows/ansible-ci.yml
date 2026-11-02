@@ -18,7 +18,7 @@ jobs:
   # 1. Formatting / style: yamllint + ansible-lint (production profile)
   lint:
     name: Lint (yamllint + ansible-lint)
-    runs-on: codeberg-small
+    runs-on: small
     container:
       image: node:20-bookworm
     steps:
@@ -48,7 +48,7 @@ jobs:
   # 2. Every playbook must parse and resolve all modules/collections
   syntax:
     name: Syntax check
-    runs-on: codeberg-small
+    runs-on: small
     container:
       image: node:20-bookworm
     steps:
@@ -92,7 +92,7 @@ jobs:
   run:
     name: Check-mode run (${{ matrix.distro }})
     needs: syntax
-    runs-on: codeberg-small
+    runs-on: small
     strategy:
       fail-fast: false
       matrix:
